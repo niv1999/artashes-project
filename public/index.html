@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#1f7a3f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Kitchen">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<title>Kitchen</title>
+<style>
+  :root { --green:#1f7a3f; --green-d:#155a2d; --bg:#f4f5f2; --card:#fff; --line:#e1e3dd; --red:#c0392b; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; height:100%; background:var(--bg); font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color:#1b1b1b; }
+  body { padding-bottom:calc(96px + env(safe-area-inset-bottom)); overscroll-behavior-y:contain; }
+  button { font:inherit; border:0; cursor:pointer; touch-action:manipulation; }
+  .center { min-height:70vh; display:flex; align-items:center; justify-content:center; font-size:72px; }
+
+  /* home */
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:16px; }
+  .tile { position:relative; aspect-ratio:1; background:var(--card); border-radius:22px; border:2px solid var(--line);
+          display:flex; align-items:center; justify-content:center; overflow:hidden; padding:0; box-shadow:0 2px 6px #0001; }
+  .tile .emoji { font-size:76px; line-height:1; }
+  .tile img { width:100%; height:100%; object-fit:cover; }
+  .tile.done { border-color:var(--green); }
+  .badge { position:absolute; bottom:8px; inset-inline-end:8px; background:#000b; color:#fff; border-radius:999px;
+           padding:4px 12px; font-size:18px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .tile.done .badge { background:var(--green); }
+
+  /* category view */
+  .top { position:sticky; top:0; z-index:5; background:var(--bg); display:flex; align-items:center; gap:12px;
+         padding:10px 16px; padding-top:calc(10px + env(safe-area-inset-top)); border-bottom:1px solid var(--line); }
+  .back { width:56px; height:56px; border-radius:16px; background:var(--card); border:2px solid var(--line); font-size:30px; }
+  .top .ic { width:56px; height:56px; border-radius:14px; overflow:hidden; display:flex; align-items:center; justify-content:center; font-size:38px; background:var(--card); }
+  .top .ic img { width:100%; height:100%; object-fit:cover; }
+  .list { padding:12px 16px; display:flex; flex-direction:column; gap:12px; }
+  .row { background:var(--card); border-radius:20px; border:2px solid var(--line); padding:10px; display:flex; align-items:center; gap:12px; }
+  .row.filled { border-color:var(--green); }
+  .row .pic { flex:0 0 96px; width:96px; height:96px; border-radius:14px; background:#eceee8; overflow:hidden;
+              display:flex; align-items:center; justify-content:center; font-size:40px; }
+  .row .pic img { width:100%; height:100%; object-fit:cover; }
+  .ctl { margin-inline-start:auto; display:flex; align-items:center; gap:8px; }
+  .step { width:58px; height:58px; border-radius:16px; font-size:34px; font-weight:700; background:#e8ebe4; color:#222; }
+  .step.plus { background:var(--green); color:#fff; }
+  .step:active { transform:scale(.94); }
+  .qty { width:84px; height:58px; border-radius:14px; border:2px solid var(--line); text-align:center; font-size:30px; font-weight:700; background:#fff; }
+  .qty:focus { outline:3px solid #1f7a3f55; border-color:var(--green); }
+
+  /* bottom bar */
+  .bar { position:fixed; inset-inline:0; bottom:0; z-index:6; display:flex; gap:12px; padding:12px 16px calc(12px + env(safe-area-inset-bottom));
+         background:linear-gradient(#f4f5f200,var(--bg) 30%); }
+  .copy { flex:1; height:68px; border-radius:20px; background:var(--green); color:#fff; font-size:34px; font-weight:700; box-shadow:0 4px 12px #0003; }
+  .copy.ok { background:#0a9b46; }
+  .trash { width:68px; height:68px; border-radius:20px; background:#fff; border:2px solid var(--line); font-size:30px; }
+
+  /* modal */
+  .modal { position:fixed; inset:0; z-index:20; background:#000a; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .sheet { background:#fff; border-radius:24px; padding:20px; width:100%; max-width:420px; text-align:center; }
+  .sheet .big { font-size:64px; margin-bottom:16px; }
+  .sheet .btns { display:flex; gap:14px; }
+  .sheet .btns button { flex:1; height:72px; border-radius:18px; font-size:36px; }
+  .yes { background:var(--red); color:#fff; } .no { background:#e8ebe4; }
+  .sheet textarea { width:100%; height:240px; border-radius:12px; border:2px solid var(--line); padding:10px; font-size:16px; direction:rtl; }
+  .offline { position:fixed; top:calc(env(safe-area-inset-top) + 4px); inset-inline-end:10px; z-index:9; font-size:18px; opacity:.85; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="offline" class="offline" hidden>📡</div>
+
+<script>
+(() => {
+  const $app = document.getElementById('app');
+  const LS = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
+               set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+
+  let data = LS.get('kitchen.data', null);        // { version, categories }
+  let counts = LS.get('kitchen.counts', {});      // { productId: "12" }
+  let view = null;                                 // null = home, else category id
+  let loading = !data;
+  let failed = false;
+
+  const imgUrl = id => '/img/' + id;
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+  const saveCounts = () => LS.set('kitchen.counts', counts);
+  const isFilled = id => counts[id] !== undefined && counts[id] !== '';
+
+  /* ---------- data sync ---------- */
+  function applyData(next) {
+    data = next;
+    LS.set('kitchen.data', data);
+    const ids = new Set(data.categories.flatMap(c => c.products.map(p => p.id)));
+    for (const k of Object.keys(counts)) if (!ids.has(k)) delete counts[k];   // product was removed
+    saveCounts();
+    if (view && !data.categories.some(c => c.id === view)) view = null;
+    warmImages();
+  }
+
+  function imageUrls() {
+    const urls = [];
+    for (const c of data?.categories || []) {
+      if (c.icon.type === 'img' && c.icon.value) urls.push(imgUrl(c.icon.value));
+      for (const p of c.products) if (p.img) urls.push(imgUrl(p.img));
+    }
+    return urls;
+  }
+
+  async function warmImages() {                     // store images in the same cache the service worker uses
+    try {
+      const urls = imageUrls();
+      const cache = await caches.open('kitchen-v1');
+      await Promise.all(urls.map(async u => {
+        if (await cache.match(u)) return;
+        try { const r = await fetch(u); if (r.ok) await cache.put(u, r); } catch {}
+      }));
+      const keep = new Set(urls);
+      for (const r of await cache.keys()) {           // drop images that are no longer in the list
+        const p = new URL(r.url).pathname;
+        if (p.startsWith('/img/') && !keep.has(p)) await cache.delete(r);
+      }
+    } catch {}
+  }
+
+  async function sync() {
+    try {
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(), 8000);
+      const res = await fetch('/api/data', { cache: 'no-store', signal: ctl.signal });
+      clearTimeout(t);
+      if (!res.ok) throw new Error();
+      const next = await res.json();
+      if (!data || next.version !== data.version) applyData(next); else warmImages();
+      failed = false;
+      document.getElementById('offline').hidden = true;
+    } catch {
+      failed = !data;
+      document.getElementById('offline').hidden = !navigator.onLine ? false : !data;
+      if (!navigator.onLine) document.getElementById('offline').hidden = false;
+    }
+    loading = false;
+    render();
+  }
+
+  /* ---------- render ---------- */
+  function iconHtml(icon) {
+    if (icon.type === 'img' && icon.value) return `<img src="${imgUrl(icon.value)}" alt="">`;
+    return `<span class="emoji">${esc(icon.value || '📦')}</span>`;
+  }
+
+  function render() {
+    const active = document.activeElement;
+    const keepFocus = active && active.classList.contains('qty') ? active.dataset.id : null;
+    const keepScroll = window.scrollY;
+
+    if (!data) {
+      $app.innerHTML = `<div class="center">${failed ? '📡' : '⏳'}</div>`;
+      return;
+    }
+    $app.innerHTML = (view ? categoryHtml() : homeHtml()) + barHtml();
+    bind();
+    if (keepFocus) { const el = $app.querySelector(`.qty[data-id="${keepFocus}"]`); el?.focus(); }
+    window.scrollTo(0, view ? keepScroll : 0);
+  }
+
+  function homeHtml() {
+    if (!data.categories.length) return `<div class="center">📦</div>`;
+    return `<div class="grid">` + data.categories.map(c => {
+      const total = c.products.length, done = c.products.filter(p => isFilled(p.id)).length;
+      const all = total > 0 && done === total;
+      return `<button class="tile ${all ? 'done' : ''}" data-cat="${c.id}">${iconHtml(c.icon)}
+        <span class="badge">${all ? '✓ ' : ''}${done}/${total}</span></button>`;
+    }).join('') + `</div>`;
+  }
+
+  function categoryHtml() {
+    const c = data.categories.find(x => x.id === view);
+    const rows = c.products.map(p => `
+      <div class="row ${isFilled(p.id) ? 'filled' : ''}">
+        <div class="pic">${p.img ? `<img src="${imgUrl(p.img)}" alt="">` : '❔'}</div>
+        <div class="ctl">
+          <button class="step" data-dec="${p.id}">−</button>
+          <input class="qty" data-id="${p.id}" inputmode="numeric" pattern="[0-9]*" maxlength="5" value="${esc(counts[p.id] ?? '')}" placeholder="–">
+          <button class="step plus" data-inc="${p.id}">+</button>
+        </div>
+      </div>`).join('');
+    return `<div class="top"><button class="back" id="back">‹</button>
+      <div class="ic">${c.icon.type === 'img' && c.icon.value ? `<img src="${imgUrl(c.icon.value)}" alt="">` : esc(c.icon.value || '📦')}</div></div>
+      <div class="list">${rows}</div>`;
+  }
+
+  function barHtml() {
+    return `<div class="bar"><button class="copy" id="copy">📋</button><button class="trash" id="clear">🗑</button></div>`;
+  }
+
+  /* ---------- events ---------- */
+  function setCount(id, v) {
+    if (v === '' || v == null) delete counts[id]; else counts[id] = String(v);
+    saveCounts();
+  }
+
+  function refreshRow(id) {                          // update one row without a full re-render (keeps keyboard open)
+    const input = $app.querySelector(`.qty[data-id="${id}"]`);
+    if (!input) return;
+    if (input.value !== (counts[id] ?? '')) input.value = counts[id] ?? '';
+    input.closest('.row').classList.toggle('filled', isFilled(id));
+  }
+
+  function bind() {
+    $app.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { view = b.dataset.cat; render(); });
+    const back = document.getElementById('back'); if (back) back.onclick = () => { view = null; render(); };
+
+    $app.querySelectorAll('[data-inc]').forEach(b => b.onclick = () => {
+      const id = b.dataset.inc; setCount(id, Math.min(99999, (parseInt(counts[id] ?? '0', 10) || 0) + 1)); refreshRow(id);
+    });
+    $app.querySelectorAll('[data-dec]').forEach(b => b.onclick = () => {
+      const id = b.dataset.dec; setCount(id, Math.max(0, (parseInt(counts[id] ?? '0', 10) || 0) - 1)); refreshRow(id);
+    });
+    $app.querySelectorAll('.qty').forEach(inp => {
+      inp.oninput = () => {
+        const digits = inp.value.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+        inp.value = digits; setCount(inp.dataset.id, digits);
+        inp.closest('.row').classList.toggle('filled', digits !== '');
+      };
+      inp.onfocus = () => setTimeout(() => inp.select(), 0);
+      inp.onblur = () => render();                   // refresh badges/colors
+    });
+    document.getElementById('copy').onclick = copy;
+    document.getElementById('clear').onclick = confirmClear;
+  }
+
+  /* ---------- message ---------- */
+  function buildMessage() {
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const lines = [`מלאי ${pad(d.getDate())}/${pad(d.getMonth() + 1)}`];
+    const missing = [];
+    for (const c of data.categories) {
+      const done = c.products.filter(p => isFilled(p.id));
+      missing.push(...c.products.filter(p => !isFilled(p.id)).map(p => p.name || '?'));
+      if (!done.length) continue;
+      const head = (c.icon.type === 'emoji' && c.icon.value ? c.icon.value + ' ' : '') + (c.name || '');
+      lines.push('', head.trim());
+      for (const p of done) lines.push(`${p.name || '?'}: ${counts[p.id]}`);
+    }
+    if (missing.length) lines.push('', '⚠️ לא נבדקו:', missing.join(', '));
+    return lines.join('\n');
+  }
+
+  async function copy() {
+    const text = buildMessage();
+    const btn = document.getElementById('copy');
+    let ok = false;
+    try { await navigator.clipboard.writeText(text); ok = true; } catch {}
+    if (!ok) {                                       // legacy fallback
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta);
+      ta.select(); try { ok = document.execCommand('copy'); } catch {} ta.remove();
+    }
+    if (ok) { btn.classList.add('ok'); btn.textContent = '✓'; setTimeout(() => { btn.classList.remove('ok'); btn.textContent = '📋'; }, 1500); }
+    else showModal(`<textarea readonly id="ta">${esc(text)}</textarea><div class="btns" style="margin-top:12px"><button class="no" id="m-close">✕</button></div>`,
+                   () => { const ta = document.getElementById('ta'); ta.focus(); ta.select(); document.getElementById('m-close').onclick = closeModal; });
+  }
+
+  /* ---------- modal ---------- */
+  function showModal(html, after) {
+    closeModal();
+    const m = document.createElement('div'); m.className = 'modal'; m.id = 'modal';
+    m.innerHTML = `<div class="sheet">${html}</div>`;
+    m.onclick = e => { if (e.target === m) closeModal(); };
+    document.body.appendChild(m); after && after();
+  }
+  const closeModal = () => document.getElementById('modal')?.remove();
+
+  function confirmClear() {
+    showModal(`<div class="big">🗑 ?</div><div class="btns"><button class="no" id="m-no">✕</button><button class="yes" id="m-yes">✓</button></div>`, () => {
+      document.getElementById('m-no').onclick = closeModal;
+      document.getElementById('m-yes').onclick = () => { counts = {}; saveCounts(); closeModal(); render(); };
+    });
+  }
+
+  /* ---------- boot ---------- */
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+  window.addEventListener('online', sync);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });
+  render();
+  sync();
+})();
+</script>
+</body>
+</html>

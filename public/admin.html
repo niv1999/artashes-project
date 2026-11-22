@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>ניהול מטבח</title>
+<style>
+  :root { --green:#1f7a3f; --bg:#f4f5f2; --card:#fff; --line:#dfe2da; --red:#c0392b; --muted:#6b7068; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif; color:#1b1b1b; padding-bottom:120px; }
+  button,input { font:inherit; }
+  button { border:0; cursor:pointer; touch-action:manipulation; }
+  input[type=text],input[type=password] { width:100%; padding:12px; border:2px solid var(--line); border-radius:12px; background:#fff; font-size:17px; }
+  input:focus { outline:3px solid #1f7a3f44; border-color:var(--green); }
+  .login { max-width:360px; margin:18vh auto 0; padding:24px; background:var(--card); border-radius:20px; box-shadow:0 4px 16px #0002; text-align:center; }
+  .login h1 { margin:0 0 16px; font-size:22px; }
+  .primary { background:var(--green); color:#fff; border-radius:12px; padding:12px 18px; font-weight:700; font-size:17px; }
+  .primary:disabled { background:#a9b3ab; }
+  .err { color:var(--red); min-height:22px; margin-top:8px; }
+
+  header { position:sticky; top:0; z-index:10; display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--bg); border-bottom:1px solid var(--line); }
+  header h1 { flex:1; margin:0; font-size:20px; }
+  .status { font-size:14px; color:var(--muted); }
+  .status.dirty { color:var(--red); font-weight:700; }
+  main { padding:14px; max-width:720px; margin:0 auto; }
+  .cat { background:var(--card); border:2px solid var(--line); border-radius:18px; margin-bottom:16px; overflow:hidden; }
+  .cat-head { display:flex; align-items:center; gap:8px; padding:10px; background:#eef0ea; flex-wrap:wrap; }
+  .cat-icon { width:56px; height:56px; border-radius:12px; background:#fff; border:2px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:32px; overflow:hidden; flex:0 0 56px; }
+  .cat-icon img { width:100%; height:100%; object-fit:cover; }
+  .cat-head .name { flex:1 1 140px; min-width:120px; font-weight:700; }
+  .emoji-in { width:64px !important; text-align:center; font-size:22px !important; padding:8px !important; }
+  .icon-btn { width:44px; height:44px; border-radius:10px; background:#fff; border:2px solid var(--line); font-size:18px; }
+  .icon-btn.del { color:var(--red); }
+  .icon-btn:disabled { opacity:.35; }
+  .prod { display:flex; align-items:center; gap:8px; padding:10px; border-top:1px solid var(--line); }
+  .thumb { width:64px; height:64px; flex:0 0 64px; border-radius:12px; background:#eceee8; border:2px dashed #b9beb3; display:flex; align-items:center; justify-content:center; font-size:26px; overflow:hidden; padding:0; }
+  .thumb.has { border:2px solid var(--line); }
+  .thumb img { width:100%; height:100%; object-fit:cover; }
+  .prod .name { flex:1; min-width:80px; }
+  .prod.noimg .thumb { border-color:var(--red); }
+  .add { display:block; width:100%; padding:12px; background:#fff; color:var(--green); font-weight:700; border-top:1px solid var(--line); font-size:16px; }
+  .add-cat { width:100%; padding:16px; background:#fff; border:2px dashed var(--green); color:var(--green); border-radius:16px; font-weight:700; font-size:18px; }
+  .hint { color:var(--muted); font-size:14px; margin:8px 2px 14px; line-height:1.5; }
+  .busy { position:fixed; inset:0; background:#fff8; display:flex; align-items:center; justify-content:center; font-size:48px; z-index:30; }
+  .toast { position:fixed; bottom:24px; inset-inline:0; margin:auto; width:max-content; max-width:90vw; background:#222; color:#fff; padding:12px 18px; border-radius:12px; z-index:40; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+
+<div id="login" class="login" hidden>
+  <h1>ניהול מטבח</h1>
+  <input type="password" id="pw" placeholder="סיסמה" autocomplete="current-password">
+  <div class="err" id="loginErr"></div>
+  <button class="primary" id="loginBtn" style="width:100%">כניסה</button>
+</div>
+
+<div id="editor" hidden>
+  <header>
+    <h1>ניהול מטבח</h1>
+    <span class="status" id="status"></span>
+    <button class="primary" id="save" disabled>שמור</button>
+  </header>
+  <main>
+    <p class="hint">יוצרים קטגוריות, ובכל קטגוריה מוסיפים מוצרים עם תמונה ושם בעברית. אפשר לכתוב את היחידה בשם (למשל: חסה (ק״ג)). בסוף חובה ללחוץ <b>שמור</b> – רק אז הטבח יקבל את העדכון.</p>
+    <div id="cats"></div>
+    <button class="add-cat" id="addCat">+ קטגוריה חדשה</button>
+  </main>
+</div>
+
+<input type="file" id="file" accept="image/*" hidden>
+<div class="busy" id="busy" hidden>⏳</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  let token = null; try { token = localStorage.getItem('kitchen.admin'); } catch {}
+  let data = { categories: [] };
+  let dirty = false;
+
+  const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+  const toast = (msg, ms = 2500) => { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, ms); };
+  const busy = on => $('busy').hidden = !on;
+
+  function markDirty(v = true) {
+    dirty = v; $('save').disabled = !v;
+    $('status').textContent = v ? 'יש שינויים שלא נשמרו' : 'הכול שמור';
+    $('status').className = 'status' + (v ? ' dirty' : '');
+  }
+  window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+  async function api(path, opts = {}) {
+    const res = await fetch(path, { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + token } });
+    if (res.status === 401) { token = null; try { localStorage.removeItem('kitchen.admin'); } catch {} showLogin(); throw new Error('unauthorized'); }
+    return res;
+  }
+
+  /* ---------- login ---------- */
+  function showLogin() { $('editor').hidden = true; $('login').hidden = false; $('pw').focus(); }
+  async function doLogin() {
+    $('loginErr').textContent = '';
+    const res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: $('pw').value }) });
+    if (!res.ok) { $('loginErr').textContent = res.status === 401 ? 'סיסמה שגויה' : 'שגיאה, נסה שוב'; return; }
+    token = (await res.json()).token; try { localStorage.setItem('kitchen.admin', token); } catch {}
+    $('pw').value = ''; load();
+  }
+  $('loginBtn').onclick = doLogin;
+  $('pw').onkeydown = e => { if (e.key === 'Enter') doLogin(); };
+
+  async function load() {
+    busy(true);
+    try {
+      const res = await fetch('/api/data', { cache: 'no-store' });
+      data = await res.json(); if (!data.categories) data.categories = [];
+      $('login').hidden = true; $('editor').hidden = false;
+      render(); markDirty(false);
+    } catch { toast('שגיאה בטעינה'); }
+    busy(false);
+  }
+
+  /* ---------- images ---------- */
+  function resize(file, max = 900) {
+    return new Promise((resolve, reject) => {
+      const img = new Image(); const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const s = Math.min(1, max / Math.max(img.width, img.height));
+        const c = document.createElement('canvas'); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        c.toBlob(b => b ? resolve(b) : reject(new Error('resize')), 'image/jpeg', 0.82);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('load')); };
+      img.src = url;
+    });
+  }
+  function pickImage() {
+    return new Promise(resolve => {
+      const f = $('file'); f.value = '';
+      f.onchange = () => resolve(f.files[0] || null);
+      f.click();
+    });
+  }
+  async function uploadImage() {
+    const file = await pickImage(); if (!file) return null;
+    busy(true);
+    try {
+      const blob = await resize(file);
+      const res = await api('/api/img', { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob });
+      if (!res.ok) throw new Error('upload');
+      return (await res.json()).id;
+    } catch (e) { if (e.message !== 'unauthorized') toast('העלאת התמונה נכשלה'); return null; }
+    finally { busy(false); }
+  }
+
+  /* ---------- render ---------- */
+  function move(arr, i, d) { const j = i + d; if (j < 0 || j >= arr.length) return; [arr[i], arr[j]] = [arr[j], arr[i]]; }
+
+  function render() {
+    const scroll = window.scrollY;
+    $('cats').innerHTML = data.categories.map((c, ci) => `
+      <section class="cat" data-ci="${ci}">
+        <div class="cat-head">
+          <div class="cat-icon">${c.icon.type === 'img' && c.icon.value ? `<img src="/img/${c.icon.value}">` : esc(c.icon.value || '📦')}</div>
+          <input type="text" class="emoji-in" data-act="emoji" maxlength="8" value="${c.icon.type === 'emoji' ? esc(c.icon.value) : ''}" placeholder="🙂" title="אימוג'י">
+          <button class="icon-btn" data-act="catimg" title="תמונה">📷</button>
+          <input type="text" class="name" data-act="catname" value="${esc(c.name)}" placeholder="שם קטגוריה">
+          <button class="icon-btn" data-act="catup" ${ci === 0 ? 'disabled' : ''}>↑</button>
+          <button class="icon-btn" data-act="catdown" ${ci === data.categories.length - 1 ? 'disabled' : ''}>↓</button>
+          <button class="icon-btn del" data-act="catdel">🗑</button>
+        </div>
+        ${c.products.map((p, pi) => `
+          <div class="prod ${p.img ? '' : 'noimg'}" data-pi="${pi}">
+            <button class="thumb ${p.img ? 'has' : ''}" data-act="pimg">${p.img ? `<img src="/img/${p.img}">` : '📷'}</button>
+            <input type="text" class="name" data-act="pname" value="${esc(p.name)}" placeholder="שם מוצר">
+            <button class="icon-btn" data-act="pup" ${pi === 0 ? 'disabled' : ''}>↑</button>
+            <button class="icon-btn" data-act="pdown" ${pi === c.products.length - 1 ? 'disabled' : ''}>↓</button>
+            <button class="icon-btn del" data-act="pdel">🗑</button>
+          </div>`).join('')}
+        <button class="add" data-act="padd">+ מוצר</button>
+      </section>`).join('');
+    window.scrollTo(0, scroll);
+  }
+
+  /* ---------- actions ---------- */
+  $('cats').addEventListener('input', e => {
+    const el = e.target, act = el.dataset.act; if (!act) return;
+    const ci = +el.closest('.cat').dataset.ci, c = data.categories[ci];
+    if (act === 'catname') c.name = el.value;
+    else if (act === 'emoji') { c.icon = { type: 'emoji', value: el.value.trim() };
+      el.closest('.cat-head').querySelector('.cat-icon').textContent = c.icon.value || '📦'; }
+    else if (act === 'pname') c.products[+el.closest('.prod').dataset.pi].name = el.value;
+    else return;
+    markDirty();
+  });
+
+  $('cats').addEventListener('click', async e => {
+    const btn = e.target.closest('button[data-act]'); if (!btn) return;
+    const act = btn.dataset.act, catEl = btn.closest('.cat'), ci = +catEl.dataset.ci, c = data.categories[ci];
+    const prodEl = btn.closest('.prod'), pi = prodEl ? +prodEl.dataset.pi : -1;
+
+    if (act === 'catup') move(data.categories, ci, -1);
+    else if (act === 'catdown') move(data.categories, ci, 1);
+    else if (act === 'catdel') { if (!confirm(`למחוק את הקטגוריה "${c.name || 'ללא שם'}" ואת כל ${c.products.length} המוצרים שבה?`)) return; data.categories.splice(ci, 1); }
+    else if (act === 'catimg') { const id = await uploadImage(); if (!id) return; c.icon = { type: 'img', value: id }; }
+    else if (act === 'padd') { c.products.push({ id: uid(), name: '', img: null }); }
+    else if (act === 'pup') move(c.products, pi, -1);
+    else if (act === 'pdown') move(c.products, pi, 1);
+    else if (act === 'pdel') { if (!confirm(`למחוק את "${c.products[pi].name || 'מוצר ללא שם'}"?`)) return; c.products.splice(pi, 1); }
+    else if (act === 'pimg') { const id = await uploadImage(); if (!id) return; c.products[pi].img = id; }
+    else return;
+
+    markDirty(); render();
+    if (act === 'padd') { const rows = $('cats').querySelectorAll(`.cat[data-ci="${ci}"] .prod .name`); rows[rows.length - 1]?.focus(); }
+  });
+
+  $('addCat').onclick = () => {
+    data.categories.push({ id: uid(), name: '', icon: { type: 'emoji', value: '📦' }, products: [] });
+    markDirty(); render();
+    const names = $('cats').querySelectorAll('.cat-head .name'); names[names.length - 1]?.focus();
+  };
+
+  $('save').onclick = async () => {
+    const problems = [];
+    data.categories.forEach(c => {
+      if (!c.name.trim()) problems.push('יש קטגוריה בלי שם');
+      c.products.forEach(p => { if (!p.name.trim()) problems.push(`בקטגוריה "${c.name}" יש מוצר בלי שם`); });
+    });
+    if (problems.length) { toast(problems[0], 4000); return; }
+    const noImg = data.categories.reduce((n, c) => n + c.products.filter(p => !p.img).length, 0);
+    if (noImg && !confirm(`ל-${noImg} מוצרים אין תמונה (מסומנים באדום). לשמור בכל זאת?`)) return;
+    busy(true);
+    try {
+      const res = await api('/api/data', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      if (!res.ok) throw new Error('save');
+      data = await res.json(); render(); markDirty(false); toast('נשמר ✓');
+    } catch (e) { if (e.message !== 'unauthorized') toast('השמירה נכשלה, נסה שוב'); }
+    busy(false);
+  };
+
+  if (token) load(); else showLogin();
+})();
+</script>
+</body>
+</html>
