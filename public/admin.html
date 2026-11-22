@@ -46,6 +46,11 @@
   .hint { color:var(--muted); font-size:14px; margin:8px 2px 14px; line-height:1.5; }
   .busy { position:fixed; inset:0; background:#fff8; display:flex; align-items:center; justify-content:center; font-size:48px; z-index:30; }
   .toast { position:fixed; bottom:24px; inset-inline:0; margin:auto; width:max-content; max-width:90vw; background:#222; color:#fff; padding:12px 18px; border-radius:12px; z-index:40; }
+  svg { display:block; }
+  .icon-btn,.thumb,.cat-icon,.busy { display:flex; align-items:center; justify-content:center; }
+  .busy svg { animation:spin 1s linear infinite; color:#1f7a3f; }
+  .thumb { color:#8a9086; }
+  @keyframes spin { to { transform:rotate(360deg); } }
   [hidden] { display:none !important; }
 </style>
 </head>
@@ -72,11 +77,14 @@
 </div>
 
 <input type="file" id="file" accept="image/*" hidden>
-<div class="busy" id="busy" hidden>⏳</div>
+<div class="busy" id="busy" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
 <script>
 (() => {
+  /* Icons: Lucide (https://lucide.dev, ISC license) */
+  const ICONS = {"trash-2": "<path d=\"M10 11v6\" /><path d=\"M14 11v6\" /><path d=\"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6\" /><path d=\"M3 6h18\" /><path d=\"M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2\" />", "camera": "<path d=\"M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z\" /><circle cx=\"12\" cy=\"13\" r=\"3\" />", "arrow-up": "<path d=\"m5 12 7-7 7 7\" /><path d=\"M12 19V5\" />", "arrow-down": "<path d=\"M12 5v14\" /><path d=\"m19 12-7 7-7-7\" />", "package": "<path d=\"M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z\" /><path d=\"M12 22V12\" /><polyline points=\"3.29 7 12 12 20.71 7\" /><path d=\"m7.5 4.27 9 5.15\" />", "loader-circle": "<path d=\"M21 12a9 9 0 1 1-6.219-8.56\" />"};
+  const ic = (n, s = 24, w = 2.25) => `<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
   const $ = id => document.getElementById(id);
   let token = null; try { token = localStorage.getItem('kitchen.admin'); } catch {}
   let data = { categories: [] };
@@ -85,7 +93,7 @@
   const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
   const toast = (msg, ms = 2500) => { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, ms); };
-  const busy = on => $('busy').hidden = !on;
+  const busy = on => { if (on && !$('busy').firstChild) $('busy').innerHTML = ic('loader-circle', 56); $('busy').hidden = !on; };
 
   function markDirty(v = true) {
     dirty = v; $('save').disabled = !v;
@@ -165,21 +173,21 @@
     $('cats').innerHTML = data.categories.map((c, ci) => `
       <section class="cat" data-ci="${ci}">
         <div class="cat-head">
-          <div class="cat-icon">${c.icon.type === 'img' && c.icon.value ? `<img src="/img/${c.icon.value}">` : (c.icon.value ? esc(c.icon.value) : '<span class="ph">📦</span>')}</div>
+          <div class="cat-icon">${c.icon.type === 'img' && c.icon.value ? `<img src="/img/${c.icon.value}">` : (c.icon.value ? esc(c.icon.value) : `<span class="ph">${ic('package', 30, 1.75)}</span>`)}</div>
           <input type="text" class="emoji-in" data-act="emoji" maxlength="8" value="${c.icon.type === 'emoji' ? esc(c.icon.value) : ''}" placeholder="🙂" title="אימוג'י">
-          <button class="icon-btn" data-act="catimg" title="תמונה">📷</button>
+          <button class="icon-btn" data-act="catimg" title="תמונה">${ic('camera', 20)}</button>
           <input type="text" class="name" data-act="catname" value="${esc(c.name)}" placeholder="שם קטגוריה">
-          <button class="icon-btn" data-act="catup" ${ci === 0 ? 'disabled' : ''}>↑</button>
-          <button class="icon-btn" data-act="catdown" ${ci === data.categories.length - 1 ? 'disabled' : ''}>↓</button>
-          <button class="icon-btn del" data-act="catdel">🗑</button>
+          <button class="icon-btn" data-act="catup" ${ci === 0 ? 'disabled' : ''}>${ic('arrow-up', 20)}</button>
+          <button class="icon-btn" data-act="catdown" ${ci === data.categories.length - 1 ? 'disabled' : ''}>${ic('arrow-down', 20)}</button>
+          <button class="icon-btn del" data-act="catdel">${ic('trash-2', 20)}</button>
         </div>
         ${c.products.map((p, pi) => `
           <div class="prod ${p.img ? '' : 'noimg'}" data-pi="${pi}">
-            <button class="thumb ${p.img ? 'has' : ''}" data-act="pimg">${p.img ? `<img src="/img/${p.img}">` : '📷'}</button>
+            <button class="thumb ${p.img ? 'has' : ''}" data-act="pimg">${p.img ? `<img src="/img/${p.img}">` : ic('camera', 26)}</button>
             <input type="text" class="name" data-act="pname" value="${esc(p.name)}" placeholder="שם מוצר">
-            <button class="icon-btn" data-act="pup" ${pi === 0 ? 'disabled' : ''}>↑</button>
-            <button class="icon-btn" data-act="pdown" ${pi === c.products.length - 1 ? 'disabled' : ''}>↓</button>
-            <button class="icon-btn del" data-act="pdel">🗑</button>
+            <button class="icon-btn" data-act="pup" ${pi === 0 ? 'disabled' : ''}>${ic('arrow-up', 20)}</button>
+            <button class="icon-btn" data-act="pdown" ${pi === c.products.length - 1 ? 'disabled' : ''}>${ic('arrow-down', 20)}</button>
+            <button class="icon-btn del" data-act="pdel">${ic('trash-2', 20)}</button>
           </div>`).join('')}
         <button class="add" data-act="padd">+ מוצר</button>
       </section>`).join('');
@@ -192,7 +200,7 @@
     const ci = +el.closest('.cat').dataset.ci, c = data.categories[ci];
     if (act === 'catname') c.name = el.value;
     else if (act === 'emoji') { c.icon = { type: 'emoji', value: el.value.trim() };
-      el.closest('.cat-head').querySelector('.cat-icon').innerHTML = c.icon.value ? esc(c.icon.value) : '<span class="ph">📦</span>'; }
+      el.closest('.cat-head').querySelector('.cat-icon').innerHTML = c.icon.value ? esc(c.icon.value) : `<span class="ph">${ic('package', 30, 1.75)}</span>`; }
     else if (act === 'pname') c.products[+el.closest('.prod').dataset.pi].name = el.value;
     else return;
     markDirty();
