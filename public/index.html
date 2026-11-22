@@ -55,6 +55,12 @@
   .copy.ok { background:#0a9b46; }
   .trash { width:68px; height:68px; border-radius:20px; background:#fff; border:2px solid var(--line); font-size:30px; }
 
+  .pic.has { cursor:zoom-in; }
+  .viewer { position:fixed; inset:0; z-index:30; background:#000; display:flex; align-items:center; justify-content:center; padding:12px; }
+  .viewer img { max-width:100%; max-height:100%; object-fit:contain; border-radius:12px; }
+  .viewer .x { position:absolute; top:calc(14px + env(safe-area-inset-top)); inset-inline-end:14px; width:60px; height:60px; border-radius:50%;
+               background:#fff; color:#111; font-size:30px; font-weight:700; box-shadow:0 2px 10px #0006; }
+
   /* modal */
   .modal { position:fixed; inset:0; z-index:20; background:#000a; display:flex; align-items:center; justify-content:center; padding:20px; }
   .sheet { background:#fff; border-radius:24px; padding:20px; width:100%; max-width:420px; text-align:center; }
@@ -178,7 +184,7 @@
     const c = data.categories.find(x => x.id === view);
     const rows = c.products.map(p => `
       <div class="row ${isFilled(p.id) ? 'filled' : ''}">
-        <div class="pic">${p.img ? `<img src="${imgUrl(p.img)}" alt="">` : '❔'}</div>
+        <div class="pic ${p.img ? 'has' : ''}" ${p.img ? `data-zoom="${p.img}"` : ''}>${p.img ? `<img src="${imgUrl(p.img)}" alt="">` : '❔'}</div>
         <div class="ctl">
           <button class="step" data-dec="${p.id}">−</button>
           <input class="qty" data-id="${p.id}" inputmode="numeric" pattern="[0-9]*" maxlength="5" value="${esc(counts[p.id] ?? '')}" placeholder="–">
@@ -226,6 +232,7 @@
       inp.onfocus = () => setTimeout(() => inp.select(), 0);
       inp.onblur = () => render();                   // refresh badges/colors
     });
+    $app.querySelectorAll('[data-zoom]').forEach(el => el.onclick = () => openViewer(el.dataset.zoom));
     document.getElementById('copy').onclick = copy;
     document.getElementById('clear').onclick = confirmClear;
   }
@@ -262,6 +269,16 @@
     else showModal(`<textarea readonly id="ta">${esc(text)}</textarea><div class="btns" style="margin-top:12px"><button class="no" id="m-close">✕</button></div>`,
                    () => { const ta = document.getElementById('ta'); ta.focus(); ta.select(); document.getElementById('m-close').onclick = closeModal; });
   }
+
+  /* ---------- full-screen image ---------- */
+  function openViewer(id) {
+    closeViewer();
+    const v = document.createElement('div'); v.className = 'viewer'; v.id = 'viewer';
+    v.innerHTML = `<img src="${imgUrl(id)}" alt=""><button class="x" aria-label="close">✕</button>`;
+    v.onclick = closeViewer;
+    document.body.appendChild(v);
+  }
+  const closeViewer = () => document.getElementById('viewer')?.remove();
 
   /* ---------- modal ---------- */
   function showModal(html, after) {
