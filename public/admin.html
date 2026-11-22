@@ -29,6 +29,8 @@
   .cat-icon { width:56px; height:56px; border-radius:12px; background:#fff; border:2px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:32px; overflow:hidden; flex:0 0 56px; }
   .cat-icon img { width:100%; height:100%; object-fit:cover; }
   .cat-head .name { flex:1 1 140px; min-width:120px; font-weight:700; }
+  .ph { opacity:.25; }
+  input::placeholder { opacity:.35; }
   .emoji-in { width:64px !important; text-align:center; font-size:22px !important; padding:8px !important; }
   .icon-btn { width:44px; height:44px; border-radius:10px; background:#fff; border:2px solid var(--line); font-size:18px; }
   .icon-btn.del { color:var(--red); }
@@ -163,7 +165,7 @@
     $('cats').innerHTML = data.categories.map((c, ci) => `
       <section class="cat" data-ci="${ci}">
         <div class="cat-head">
-          <div class="cat-icon">${c.icon.type === 'img' && c.icon.value ? `<img src="/img/${c.icon.value}">` : esc(c.icon.value || '📦')}</div>
+          <div class="cat-icon">${c.icon.type === 'img' && c.icon.value ? `<img src="/img/${c.icon.value}">` : (c.icon.value ? esc(c.icon.value) : '<span class="ph">📦</span>')}</div>
           <input type="text" class="emoji-in" data-act="emoji" maxlength="8" value="${c.icon.type === 'emoji' ? esc(c.icon.value) : ''}" placeholder="🙂" title="אימוג'י">
           <button class="icon-btn" data-act="catimg" title="תמונה">📷</button>
           <input type="text" class="name" data-act="catname" value="${esc(c.name)}" placeholder="שם קטגוריה">
@@ -190,7 +192,7 @@
     const ci = +el.closest('.cat').dataset.ci, c = data.categories[ci];
     if (act === 'catname') c.name = el.value;
     else if (act === 'emoji') { c.icon = { type: 'emoji', value: el.value.trim() };
-      el.closest('.cat-head').querySelector('.cat-icon').textContent = c.icon.value || '📦'; }
+      el.closest('.cat-head').querySelector('.cat-icon').innerHTML = c.icon.value ? esc(c.icon.value) : '<span class="ph">📦</span>'; }
     else if (act === 'pname') c.products[+el.closest('.prod').dataset.pi].name = el.value;
     else return;
     markDirty();
@@ -217,7 +219,7 @@
   });
 
   $('addCat').onclick = () => {
-    data.categories.push({ id: uid(), name: '', icon: { type: 'emoji', value: '📦' }, products: [] });
+    data.categories.push({ id: uid(), name: '', icon: { type: 'emoji', value: '' }, products: [] });
     markDirty(); render();
     const names = $('cats').querySelectorAll('.cat-head .name'); names[names.length - 1]?.focus();
   };
